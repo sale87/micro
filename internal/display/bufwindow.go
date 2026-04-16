@@ -18,6 +18,14 @@ type focusRange struct {
 	end   buffer.Loc
 }
 
+func noFocusRange(mode string) focusRange {
+	return focusRange{
+		mode:  mode,
+		start: buffer.Loc{X: -1, Y: -1},
+		end:   buffer.Loc{X: -1, Y: -1},
+	}
+}
+
 func blendColor(from, to tcell.Color, ratio float64) tcell.Color {
 	fr, fg, fb := from.TrueColor().RGB()
 	tr, tg, tb := to.TrueColor().RGB()
@@ -34,16 +42,6 @@ func blendColor(from, to tcell.Color, ratio float64) tcell.Color {
 		blend(fg, tg),
 		blend(fb, tb),
 	)
-}
-
-func resolveFocusColors(fg, bg tcell.Color) (tcell.Color, tcell.Color) {
-	if fg == tcell.ColorDefault || !fg.Valid() {
-		fg = tcell.ColorSilver
-	}
-	if bg == tcell.ColorDefault || !bg.Valid() {
-		bg = tcell.ColorBlack
-	}
-	return fg, bg
 }
 
 // The BufWindow provides a way of displaying a certain section of a buffer.
@@ -456,11 +454,26 @@ func (w *BufWindow) getFocusRange() focusRange {
 			end:   buffer.Loc{X: util.CharacterCount(w.Buf.LineBytes(endY)), Y: endY},
 		}
 	case "sentence":
-		paraStartY := c.Y
+		effective := c
+		if c.X > 0 {
+			prev := buffer.Loc{X: c.X - 1, Y: c.Y}
+			prevRune := w.Buf.RuneAt(prev)
+			if prevRune == '.' || prevRune == '!' || prevRune == '?' {
+				effective = prev
+			} else if util.IsWhitespace(prevRune) && c.X > 1 {
+				prevPrev := buffer.Loc{X: c.X - 2, Y: c.Y}
+				prevPrevRune := w.Buf.RuneAt(prevPrev)
+				if prevPrevRune == '.' || prevPrevRune == '!' || prevPrevRune == '?' {
+					return noFocusRange(mode)
+				}
+			}
+		}
+
+		paraStartY := effective.Y
 		for paraStartY > 0 && !w.lineIsBlank(paraStartY-1) {
 			paraStartY--
 		}
-		paraEndY := c.Y
+		paraEndY := effective.Y
 		for paraEndY < w.Buf.LinesNum()-1 && !w.lineIsBlank(paraEndY+1) {
 			paraEndY++
 		}
@@ -469,7 +482,7 @@ func (w *BufWindow) getFocusRange() focusRange {
 		end := buffer.Loc{X: util.CharacterCount(w.Buf.LineBytes(paraEndY)), Y: paraEndY}
 
 		prev := start
-		for loc := start; loc.LessThan(c); loc = loc.Move(1, w.Buf) {
+		for loc := start; loc.LessThan(effective); loc = loc.Move(1, w.Buf) {
 			if loc.X >= util.CharacterCount(w.Buf.LineBytes(loc.Y)) {
 				continue
 			}
@@ -490,7 +503,7 @@ func (w *BufWindow) getFocusRange() focusRange {
 		}
 		start = prev
 
-		for loc := c; loc.LessThan(end); loc = loc.Move(1, w.Buf) {
+		for loc := effective; loc.LessThan(end); loc = loc.Move(1, w.Buf) {
 			if loc.X >= util.CharacterCount(w.Buf.LineBytes(loc.Y)) {
 				continue
 			}
@@ -553,7 +566,15 @@ func (f focusRange) apply(style tcell.Style, loc buffer.Loc, strength float64) t
 		if bg == tcell.ColorDefault || !bg.Valid() {
 			bg = defBg
 		}
-		fg, bg = resolveFocusColors(fg, bg)
+		// Terminal defaults do not expose concrete RGB values, so use stable
+		// fallbacks only when the theme leaves a side unspecified. This preserves
+		// explicit colorscheme hues while still allowing focusstrength to work.
+		if fg == tcell.ColorDefault || !fg.Valid() {
+			fg = tcell.ColorSilver
+		}
+		if bg == tcell.ColorDefault || !bg.Valid() {
+			bg = tcell.ColorBlack
+		}
 
 		faded := blendColor(fg, bg, strength)
 		return style.Foreground(faded)
