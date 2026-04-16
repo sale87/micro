@@ -25,6 +25,7 @@ var optionValidators = map[string]optionValidator{
 	"clipboard":       validateChoice,
 	"colorcolumn":     validateNonNegativeValue,
 	"colorscheme":     validateColorscheme,
+	"cursorstyle":     validateChoice,
 	"detectlimit":     validateNonNegativeValue,
 	"encoding":        validateEncoding,
 	"fileformat":      validateChoice,
@@ -44,6 +45,7 @@ var optionValidators = map[string]optionValidator{
 // a list of settings with pre-defined choices
 var OptionChoices = map[string][]string{
 	"clipboard":       {"internal", "external", "terminal"},
+	"cursorstyle":     {"block", "line"},
 	"fileformat":      {"unix", "dos"},
 	"helpsplit":       {"hsplit", "vsplit"},
 	"matchbracestyle": {"underline", "highlight"},
@@ -106,6 +108,7 @@ var defaultCommonSettings = map[string]any{
 	"tabmovement":     false,
 	"tabsize":         float64(4),
 	"tabstospaces":    false,
+	"typewriter":      false,
 	"truecolor":       "auto",
 	"useprimary":      true,
 	"wordwrap":        false,
@@ -117,6 +120,7 @@ var DefaultGlobalOnlySettings = map[string]any{
 	"autosave":       float64(0),
 	"clipboard":      "external",
 	"colorscheme":    "default",
+	"cursorstyle":    "block",
 	"divchars":       "|-",
 	"divreverse":     true,
 	"fakecursor":     defaultFakeCursor(),

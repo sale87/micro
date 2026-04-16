@@ -57,7 +57,7 @@ func (w *BufWindow) SetBuffer(b *buffer.Buffer) {
 			}
 		}
 
-		if option == "softwrap" || option == "wordwrap" {
+		if option == "softwrap" || option == "wordwrap" || option == "typewriter" {
 			w.Relocate()
 			for _, c := range w.Buf.GetCursors() {
 				c.LastWrappedVisualX = c.GetVisualX(true)
@@ -233,25 +233,33 @@ func (w *BufWindow) Relocate() bool {
 	height := w.bufHeight
 	ret := false
 	activeC := w.Buf.GetActiveCursor()
-	scrollmargin := int(b.Settings["scrollmargin"].(float64))
 
 	c := w.SLocFromLoc(activeC.Loc)
-	bStart := SLoc{0, 0}
-	bEnd := w.SLocFromLoc(b.End())
+	if b.Settings["typewriter"].(bool) {
+		target := w.Scroll(c, -height/2)
+		if target != w.StartLine {
+			w.StartLine = target
+			ret = true
+		}
+	} else {
+		scrollmargin := int(b.Settings["scrollmargin"].(float64))
+		bStart := SLoc{0, 0}
+		bEnd := w.SLocFromLoc(b.End())
 
-	if c.LessThan(w.Scroll(w.StartLine, scrollmargin)) && c.GreaterThan(w.Scroll(bStart, scrollmargin-1)) {
-		w.StartLine = w.Scroll(c, -scrollmargin)
-		ret = true
-	} else if c.LessThan(w.StartLine) {
-		w.StartLine = c
-		ret = true
-	}
-	if c.GreaterThan(w.Scroll(w.StartLine, height-1-scrollmargin)) && c.LessEqual(w.Scroll(bEnd, -scrollmargin)) {
-		w.StartLine = w.Scroll(c, -height+1+scrollmargin)
-		ret = true
-	} else if c.GreaterThan(w.Scroll(bEnd, -scrollmargin)) && c.GreaterThan(w.Scroll(w.StartLine, height-1)) {
-		w.StartLine = w.Scroll(bEnd, -height+1)
-		ret = true
+		if c.LessThan(w.Scroll(w.StartLine, scrollmargin)) && c.GreaterThan(w.Scroll(bStart, scrollmargin-1)) {
+			w.StartLine = w.Scroll(c, -scrollmargin)
+			ret = true
+		} else if c.LessThan(w.StartLine) {
+			w.StartLine = c
+			ret = true
+		}
+		if c.GreaterThan(w.Scroll(w.StartLine, height-1-scrollmargin)) && c.LessEqual(w.Scroll(bEnd, -scrollmargin)) {
+			w.StartLine = w.Scroll(c, -height+1+scrollmargin)
+			ret = true
+		} else if c.GreaterThan(w.Scroll(bEnd, -scrollmargin)) && c.GreaterThan(w.Scroll(w.StartLine, height-1)) {
+			w.StartLine = w.Scroll(bEnd, -height+1)
+			ret = true
+		}
 	}
 
 	// horizontal relocation (scrolling)

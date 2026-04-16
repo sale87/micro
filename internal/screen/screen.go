@@ -70,6 +70,7 @@ type screenCell struct {
 }
 
 var lastCursor screenCell
+var lastCursorStyle string
 
 // ShowFakeCursor displays a cursor at the given position by modifying the
 // style of the given column instead of actually using the terminal cursor
@@ -107,8 +108,24 @@ func ShowCursor(x, y int) {
 	if UseFake() {
 		ShowFakeCursor(x, y)
 	} else {
+		applyCursorStyle()
 		Screen.ShowCursor(x, y)
 	}
+}
+
+func applyCursorStyle() {
+	style := config.GetGlobalOption("cursorstyle").(string)
+	if style == lastCursorStyle {
+		return
+	}
+
+	seq := "\x1b[2 q"
+	if style == "line" {
+		seq = "\x1b[6 q"
+	}
+
+	_, _ = os.Stdout.WriteString(seq)
+	lastCursorStyle = style
 }
 
 // SetContent sets a cell at a point on the screen and makes sure that it is
@@ -181,6 +198,7 @@ func TempStart(screenWasNil bool) {
 // Init creates and initializes the tcell screen
 func Init() error {
 	drawChan = make(chan bool, 8)
+	lastCursorStyle = ""
 
 	// Should we enable true color?
 	truecolor := config.GetGlobalOption("truecolor").(string)
@@ -219,6 +237,7 @@ func Init() error {
 	if err = Screen.Init(); err != nil {
 		return err
 	}
+	applyCursorStyle()
 
 	Screen.SetPaste(config.GetGlobalOption("paste").(bool))
 

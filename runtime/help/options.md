@@ -94,6 +94,12 @@ Here are the available options:
 
     default value: `true`
 
+* `cursorstyle`: controls the terminal cursor shape.
+   * `block`: use a steady block cursor.
+   * `line`: use a steady line cursor.
+
+    default value: `block`
+
 * `detectlimit`: if this is not set to 0, it will limit the amount of first
    lines in a file that are matched to determine the filetype.
    A higher limit means better accuracy of guessing the filetype, but also
@@ -496,6 +502,13 @@ Here are the available options:
 
     default value: `false`
 
+* `typewriter`: keep the active cursor visually centered in the view while
+   moving or typing. This works especially well together with `softwrap` and
+   `wordwrap` for prose writing, and unlike `scrollmargin` it follows wrapped
+   visual rows instead of only buffer lines.
+
+    default value: `false`
+
 * `truecolor`: controls whether micro will use true colors (24-bit colors) when
    using a colorscheme with true colors, such as `solarized-tc` or `atom-dark`.
    * `auto`: enable usage of true color if micro detects that it is supported by
@@ -571,6 +584,7 @@ so that you can see what the formatting should look like.
     "clipboard": "external",
     "colorcolumn": 0,
     "colorscheme": "default",
+    "cursorstyle": "block",
     "comment": true,
     "cursorline": true,
     "detectlimit": 100,
@@ -640,6 +654,7 @@ so that you can see what the formatting should look like.
     "tabreverse": false,
     "tabsize": 4,
     "tabstospaces": false,
+    "typewriter": false,
     "useprimary": true,
     "wordwrap": false,
     "xterm": false
