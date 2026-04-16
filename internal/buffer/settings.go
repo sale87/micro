@@ -114,6 +114,9 @@ func (b *Buffer) DoSetOptionNative(option string, nativeValue any) {
 				buf.HighlightSearch = nativeValue.(bool)
 			}
 		}
+	} else if option == "padhorizontal" {
+		b.Settings["padleft"] = nativeValue
+		b.Settings["padright"] = nativeValue
 	} else {
 		for _, pl := range config.Plugins {
 			if option == pl.Name {

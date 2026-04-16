@@ -12,6 +12,40 @@ import (
 	"github.com/micro-editor/tcell/v2"
 )
 
+type focusRange struct {
+	mode  string
+	start buffer.Loc
+	end   buffer.Loc
+}
+
+func blendColor(from, to tcell.Color, ratio float64) tcell.Color {
+	fr, fg, fb := from.TrueColor().RGB()
+	tr, tg, tb := to.TrueColor().RGB()
+	if fr < 0 || tr < 0 {
+		return from
+	}
+
+	blend := func(a, b int32) int32 {
+		return int32(float64(a)*(1-ratio) + float64(b)*ratio)
+	}
+
+	return tcell.NewRGBColor(
+		blend(fr, tr),
+		blend(fg, tg),
+		blend(fb, tb),
+	)
+}
+
+func resolveFocusColors(fg, bg tcell.Color) (tcell.Color, tcell.Color) {
+	if fg == tcell.ColorDefault || !fg.Valid() {
+		fg = tcell.ColorSilver
+	}
+	if bg == tcell.ColorDefault || !bg.Valid() {
+		bg = tcell.ColorBlack
+	}
+	return fg, bg
+}
+
 // The BufWindow provides a way of displaying a certain section of a buffer.
 type BufWindow struct {
 	*View
@@ -64,8 +98,13 @@ func (w *BufWindow) SetBuffer(b *buffer.Buffer) {
 			}
 		}
 
+		if option == "focusmode" || option == "focusstrength" {
+			screen.Redraw()
+		}
+
 		if option == "diffgutter" || option == "ruler" || option == "scrollbar" ||
-			option == "statusline" || option == "padleft" || option == "padright" {
+			option == "statusline" || option == "padleft" || option == "padright" ||
+			option == "padhorizontal" {
 			w.updateDisplayInfo()
 			w.Relocate()
 		}
@@ -388,6 +427,140 @@ func (w *BufWindow) getStyle(style tcell.Style, bloc buffer.Loc) (tcell.Style, b
 	return style, false
 }
 
+func (w *BufWindow) lineIsBlank(y int) bool {
+	return strings.TrimSpace(string(w.Buf.LineBytes(y))) == ""
+}
+
+func (w *BufWindow) getFocusRange() focusRange {
+	mode := w.Buf.Settings["focusmode"].(string)
+	if mode == "off" {
+		return focusRange{mode: mode}
+	}
+
+	c := w.Buf.GetActiveCursor().Loc
+	switch mode {
+	case "paragraph":
+		startY := c.Y
+		for startY > 0 && !w.lineIsBlank(startY-1) {
+			startY--
+		}
+
+		endY := c.Y
+		for endY < w.Buf.LinesNum()-1 && !w.lineIsBlank(endY+1) {
+			endY++
+		}
+
+		return focusRange{
+			mode:  mode,
+			start: buffer.Loc{X: 0, Y: startY},
+			end:   buffer.Loc{X: util.CharacterCount(w.Buf.LineBytes(endY)), Y: endY},
+		}
+	case "sentence":
+		paraStartY := c.Y
+		for paraStartY > 0 && !w.lineIsBlank(paraStartY-1) {
+			paraStartY--
+		}
+		paraEndY := c.Y
+		for paraEndY < w.Buf.LinesNum()-1 && !w.lineIsBlank(paraEndY+1) {
+			paraEndY++
+		}
+
+		start := buffer.Loc{X: 0, Y: paraStartY}
+		end := buffer.Loc{X: util.CharacterCount(w.Buf.LineBytes(paraEndY)), Y: paraEndY}
+
+		prev := start
+		for loc := start; loc.LessThan(c); loc = loc.Move(1, w.Buf) {
+			if loc.X >= util.CharacterCount(w.Buf.LineBytes(loc.Y)) {
+				continue
+			}
+			r := w.Buf.RuneAt(loc)
+			if r == '.' || r == '!' || r == '?' {
+				next := loc.Move(1, w.Buf)
+				for next.LessThan(end) {
+					if next.X >= util.CharacterCount(w.Buf.LineBytes(next.Y)) {
+						break
+					}
+					if !util.IsWhitespace(w.Buf.RuneAt(next)) {
+						break
+					}
+					next = next.Move(1, w.Buf)
+				}
+				prev = next
+			}
+		}
+		start = prev
+
+		for loc := c; loc.LessThan(end); loc = loc.Move(1, w.Buf) {
+			if loc.X >= util.CharacterCount(w.Buf.LineBytes(loc.Y)) {
+				continue
+			}
+			r := w.Buf.RuneAt(loc)
+			if r == '.' || r == '!' || r == '?' {
+				end = loc
+				break
+			}
+		}
+
+		return focusRange{
+			mode:  mode,
+			start: start,
+			end:   end,
+		}
+	}
+
+	return focusRange{mode: "off"}
+}
+
+func (f focusRange) contains(loc buffer.Loc) bool {
+	if f.mode == "off" {
+		return true
+	}
+	return !loc.LessThan(f.start) && !loc.GreaterThan(f.end)
+}
+
+func (f focusRange) intersectsLine(y int) bool {
+	if f.mode == "off" {
+		return true
+	}
+	return y >= f.start.Y && y <= f.end.Y
+}
+
+func (w *BufWindow) focusStrength() float64 {
+	strength := 0.96
+	if fs, ok := w.Buf.Settings["focusstrength"].(float64); ok {
+		strength = fs / 100
+	}
+	if strength < 0 {
+		return 0
+	}
+	if strength > 1 {
+		return 1
+	}
+	return strength
+}
+
+func (f focusRange) apply(style tcell.Style, loc buffer.Loc, strength float64) tcell.Style {
+	if !f.contains(loc) {
+		if strength <= 0 {
+			return style
+		}
+
+		fg, bg, _ := style.Decompose()
+		defFg, defBg, _ := config.DefStyle.Decompose()
+		if fg == tcell.ColorDefault || !fg.Valid() {
+			fg = defFg
+		}
+		if bg == tcell.ColorDefault || !bg.Valid() {
+			bg = defBg
+		}
+		fg, bg = resolveFocusColors(fg, bg)
+
+		faded := blendColor(fg, bg, strength)
+		return style.Foreground(faded)
+	}
+	return style
+}
+
 func (w *BufWindow) showCursor(x, y int, main bool) {
 	if w.active {
 		if main {
@@ -468,6 +641,8 @@ func (w *BufWindow) displayBuffer() {
 	bloc := buffer.Loc{X: -1, Y: w.StartLine.Line}
 
 	cursors := b.GetCursors()
+	focus := w.getFocusRange()
+	focusStrength := w.focusStrength()
 
 	curStyle := config.DefStyle
 
@@ -508,6 +683,9 @@ func (w *BufWindow) displayBuffer() {
 		s := lineNumStyle
 		if currentLine {
 			s = curNumStyle
+		}
+		if !focus.intersectsLine(bloc.Y) {
+			s = s.Dim(true)
 		}
 
 		if vloc.Y >= 0 {
@@ -700,6 +878,8 @@ func (w *BufWindow) displayBuffer() {
 				}
 			}
 
+			style = focus.apply(style, bloc, focusStrength)
+
 			screen.SetContent(w.X+vloc.X, w.Y+vloc.Y, r, combc, style)
 
 			if showcursor {
@@ -844,6 +1024,9 @@ func (w *BufWindow) displayBuffer() {
 					style = style.Background(fg)
 				}
 			}
+		}
+		if !focus.intersectsLine(bloc.Y) {
+			style = style.Dim(true)
 		}
 		for i := vloc.X; i < maxWidth; i++ {
 			curStyle := style

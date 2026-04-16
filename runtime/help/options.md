@@ -174,6 +174,20 @@ Here are the available options:
     default value: `unknown`. This will be automatically overridden depending
     on the file you open.
 
+* `focusmode`: controls prose focus dimming around the active cursor.
+   Possible values:
+    * `off`: do not dim surrounding text
+    * `paragraph`: dim everything except the current paragraph
+    * `sentence`: dim everything except the current sentence
+
+    default value: `off`
+
+* `focusstrength`: controls how strongly unfocused text fades toward the
+   background when `focusmode` is enabled. This is a percentage from `0` to
+   `100`, where higher values mean stronger dimming.
+
+    default value: `96`
+
 * `helpsplit`: sets the split type to be used by the `help` command.
    Possible values:
     * `vsplit`: open help in a vertical split pane
@@ -291,6 +305,9 @@ Here are the available options:
 
 * `padleft`: the number of columns of whitespace to add to the left of the
     text buffer. Useful for centering text on wide screens.
+    default value: `0`
+* `padhorizontal`: the number of columns of whitespace to add to both the left
+    and right sides of the text buffer at the same time.
     default value: `0`
 * `padright`: the number of columns of whitespace to add to the right of the
     text buffer. Useful for centering text on wide screens.
@@ -598,6 +615,8 @@ so that you can see what the formatting should look like.
     "fastdirty": false,
     "fileformat": "unix",
     "filetype": "unknown",
+    "focusmode": "off",
+    "focusstrength": 96,
     "ftoptions": true,
     "helpsplit": "hsplit",
     "hlsearch": false,
@@ -619,6 +638,7 @@ so that you can see what the formatting should look like.
     "mouse": true,
     "multiopen": "tab",
     "pageoverlap": 2,
+    "padhorizontal": 0,
     "parsecursor": false,
     "paste": false,
     "permbackup": false,
