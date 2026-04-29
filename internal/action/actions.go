@@ -483,6 +483,35 @@ func (h *BufPane) StartOfLine() bool {
 	return true
 }
 
+func (h *BufPane) wrappedLineStartLoc() buffer.Loc {
+	if !h.Buf.Settings["softwrap"].(bool) {
+		return buffer.Loc{X: 0, Y: h.Cursor.Y}
+	}
+
+	vloc := h.VLocFromLoc(h.Cursor.Loc)
+	return h.LocFromVLoc(display.VLoc{
+		SLoc:    vloc.SLoc,
+		VisualX: 0,
+	})
+}
+
+func (h *BufPane) wrappedLineEndLoc() buffer.Loc {
+	if !h.Buf.Settings["softwrap"].(bool) {
+		return buffer.Loc{X: util.CharacterCount(h.Buf.LineBytes(h.Cursor.Y)), Y: h.Cursor.Y}
+	}
+
+	vloc := h.VLocFromLoc(h.Cursor.Loc)
+	next := h.Scroll(vloc.SLoc, 1)
+	if next.Line != vloc.Line {
+		return buffer.Loc{X: util.CharacterCount(h.Buf.LineBytes(h.Cursor.Y)), Y: h.Cursor.Y}
+	}
+
+	return h.LocFromVLoc(display.VLoc{
+		SLoc:    next,
+		VisualX: 0,
+	})
+}
+
 // EndOfLine moves the cursor to the end of the line
 func (h *BufPane) EndOfLine() bool {
 	h.Cursor.Deselect(true)
@@ -542,6 +571,52 @@ func (h *BufPane) SelectToEndOfLine() bool {
 		h.Cursor.OrigSelection[0] = h.Cursor.Loc
 	}
 	h.Cursor.End()
+	h.Cursor.SelectTo(h.Cursor.Loc)
+	h.Relocate()
+	return true
+}
+
+// SelectToStartOfSoftLineToggle toggles the selection between the start of the
+// current wrapped screen line and the start of the physical line.
+func (h *BufPane) SelectToStartOfSoftLineToggle() bool {
+	if !h.Cursor.HasSelection() {
+		h.Cursor.OrigSelection[0] = h.Cursor.Loc
+	}
+
+	start := h.wrappedLineStartLoc()
+	if h.Cursor.Loc == start {
+		h.Cursor.Start()
+	} else {
+		h.Cursor.GotoLoc(start)
+	}
+
+	h.Cursor.SelectTo(h.Cursor.Loc)
+	h.Relocate()
+	return true
+}
+
+// SelectToEndOfSoftLineToggle toggles the selection between the end of the
+// current wrapped screen line and the end of the physical line.
+func (h *BufPane) SelectToEndOfSoftLineToggle() bool {
+	hadSelection := h.Cursor.HasSelection()
+	if !hadSelection {
+		h.Cursor.OrigSelection[0] = h.Cursor.Loc
+	}
+
+	if hadSelection && h.Cursor.Loc == h.wrappedLineStartLoc() && h.Cursor.Loc != h.Cursor.OrigSelection[0] {
+		h.Cursor.End()
+		h.Cursor.SelectTo(h.Cursor.Loc)
+		h.Relocate()
+		return true
+	}
+
+	end := h.wrappedLineEndLoc()
+	if h.Cursor.Loc == end {
+		h.Cursor.End()
+	} else {
+		h.Cursor.GotoLoc(end)
+	}
+
 	h.Cursor.SelectTo(h.Cursor.Loc)
 	h.Relocate()
 	return true
