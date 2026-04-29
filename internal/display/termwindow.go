@@ -14,13 +14,18 @@ type TermWindow struct {
 	*View
 	*shell.Terminal
 
-	active bool
+	active        bool
+	paneX, paneY  int
+	paneWidth     int
+	paneHeight    int
+	padLeftOffset int
 }
 
 func NewTermWindow(x, y, w, h int, term *shell.Terminal) *TermWindow {
 	tw := new(TermWindow)
 	tw.View = new(View)
 	tw.Terminal = term
+	tw.paneX, tw.paneY = x, y
 	tw.X, tw.Y = x, y
 	tw.Resize(w, h)
 	return tw
@@ -28,11 +33,35 @@ func NewTermWindow(x, y, w, h int, term *shell.Terminal) *TermWindow {
 
 // Resize informs the terminal of a resize event
 func (w *TermWindow) Resize(width, height int) {
+	w.paneWidth, w.paneHeight = width, height
+
 	if config.GetGlobalOption("statusline").(bool) {
 		height--
 	}
-	w.Term.Resize(width, height)
-	w.Width, w.Height = width, height
+
+	padLeft := util.IntOpt(config.GetGlobalOption("padleft"))
+	padRight := util.IntOpt(config.GetGlobalOption("padright"))
+	if padHorizontal := util.IntOpt(config.GetGlobalOption("padhorizontal")); padHorizontal > 0 {
+		padLeft = padHorizontal
+		padRight = padHorizontal
+	}
+	w.padLeftOffset = padLeft
+
+	if padLeft > width {
+		w.padLeftOffset = 0
+		padLeft = 0
+	} else if padLeft+padRight > width {
+		padRight = width - padLeft
+	}
+
+	termWidth := width - padLeft - padRight
+	if termWidth < 0 {
+		termWidth = 0
+	}
+
+	w.X, w.Y = w.paneX+w.padLeftOffset, w.paneY
+	w.Term.Resize(termWidth, height)
+	w.Width, w.Height = termWidth, height
 }
 
 func (w *TermWindow) SetActive(b bool) {
@@ -48,9 +77,9 @@ func (w *TermWindow) LocFromVisual(vloc buffer.Loc) buffer.Loc {
 }
 
 func (w *TermWindow) Clear() {
-	for y := 0; y < w.Height; y++ {
-		for x := 0; x < w.Width; x++ {
-			screen.SetContent(w.X+x, w.Y+y, ' ', nil, config.DefStyle)
+	for y := 0; y < w.paneHeight; y++ {
+		for x := 0; x < w.paneWidth; x++ {
+			screen.SetContent(w.paneX+x, w.paneY+y, ' ', nil, config.DefStyle)
 		}
 	}
 }
@@ -61,12 +90,15 @@ func (w *TermWindow) GetView() *View {
 }
 func (w *TermWindow) SetView(v *View) {
 	w.View = v
+	w.paneX, w.paneY = v.X, v.Y
 }
 
 // Display displays this terminal in a view
 func (w *TermWindow) Display() {
 	w.State.Lock()
 	defer w.State.Unlock()
+
+	w.Clear()
 
 	var l buffer.Loc
 	for y := 0; y < w.Height; y++ {
@@ -98,13 +130,13 @@ func (w *TermWindow) Display() {
 
 		text := []byte(w.Name())
 		textLen := util.CharacterCount(text)
-		for x := 0; x < w.Width; x++ {
+		for x := 0; x < w.paneWidth; x++ {
 			if x < textLen {
 				r, combc, size := util.DecodeCharacter(text)
 				text = text[size:]
-				screen.SetContent(w.X+x, w.Y+w.Height, r, combc, statusLineStyle)
+				screen.SetContent(w.paneX+x, w.paneY+w.Height, r, combc, statusLineStyle)
 			} else {
-				screen.SetContent(w.X+x, w.Y+w.Height, ' ', nil, statusLineStyle)
+				screen.SetContent(w.paneX+x, w.paneY+w.Height, ' ', nil, statusLineStyle)
 			}
 		}
 	}
