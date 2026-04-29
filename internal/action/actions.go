@@ -1750,11 +1750,13 @@ func (h *BufPane) OpenFile() bool {
 
 // JumpLine asks the user to enter a line number to jump to
 func (h *BufPane) JumpLine() bool {
-	InfoBar.Prompt("> ", "goto ", "Command", nil, func(resp string, canceled bool) {
+	InfoBar.Prompt("> ", "goto ", "Command", updateCommandColorschemePreview, func(resp string, canceled bool) {
+		restoreCommandColorschemePreview()
 		if !canceled {
 			h.HandleCommand(resp)
 		}
 	})
+	updateCommandColorschemePreview("goto ")
 	return true
 }
 
@@ -1933,7 +1935,8 @@ func (h *BufPane) ShellMode() bool {
 
 // CommandMode lets the user enter a command
 func (h *BufPane) CommandMode() bool {
-	InfoBar.Prompt("> ", "", "Command", nil, func(resp string, canceled bool) {
+	InfoBar.Prompt("> ", "", "Command", updateCommandColorschemePreview, func(resp string, canceled bool) {
+		restoreCommandColorschemePreview()
 		if !canceled {
 			h.HandleCommand(resp)
 		}
@@ -2107,6 +2110,24 @@ func (h *BufPane) VSplitAction() bool {
 func (h *BufPane) HSplitAction() bool {
 	h.HSplitBuf(buffer.NewBufferFromString("", "", buffer.BTDefault))
 
+	return true
+}
+
+// HSplitTerm opens a terminal in a new horizontal split.
+func (h *BufPane) HSplitTerm() bool {
+	if !TermEmuSupported {
+		InfoBar.Error("Terminal emulator not supported on this system")
+		return false
+	}
+
+	sh := os.Getenv("SHELL")
+	if sh == "" {
+		InfoBar.Error("Shell environment not found")
+		return false
+	}
+
+	pane := h.HSplitBuf(buffer.NewBufferFromString("", "", buffer.BTDefault))
+	pane.openTerm([]string{sh}, false)
 	return true
 }
 

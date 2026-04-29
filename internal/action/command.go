@@ -30,6 +30,14 @@ type Command struct {
 
 var commands map[string]Command
 
+type colorschemePreviewState struct {
+	active   bool
+	original string
+	current  string
+}
+
+var commandColorschemePreview colorschemePreviewState
+
 func InitCommands() {
 	commands = map[string]Command{
 		"set":         {(*BufPane).SetCmd, OptionValueComplete},
@@ -83,11 +91,13 @@ func MakeCommand(name string, action func(bp *BufPane, args []string), completer
 // enter
 func CommandEditAction(prompt string) BufKeyAction {
 	return func(h *BufPane) bool {
-		InfoBar.Prompt("> ", prompt, "Command", nil, func(resp string, canceled bool) {
+		InfoBar.Prompt("> ", prompt, "Command", updateCommandColorschemePreview, func(resp string, canceled bool) {
+			restoreCommandColorschemePreview()
 			if !canceled {
 				MainTab().CurPane().HandleCommand(resp)
 			}
 		})
+		updateCommandColorschemePreview(prompt)
 		return false
 	}
 }
@@ -629,6 +639,70 @@ func doSetGlobalOptionNative(option string, nativeValue any) error {
 	}
 
 	return nil
+}
+
+func applyColorschemePreview(colorscheme string) error {
+	if !config.ColorschemeExists(colorscheme) {
+		return errors.New(colorscheme + " is not a valid colorscheme")
+	}
+	if config.GlobalSettings["colorscheme"].(string) == colorscheme {
+		return nil
+	}
+
+	config.GlobalSettings["colorscheme"] = colorscheme
+	if err := config.InitColorscheme(); err != nil {
+		return err
+	}
+	for _, b := range buffer.OpenBuffers {
+		b.UpdateRules()
+	}
+	screen.Redraw()
+	return nil
+}
+
+func commandColorschemeCandidate(input string) (string, bool) {
+	args, err := shellquote.Split(input)
+	if err != nil || len(args) != 3 {
+		return "", false
+	}
+	if args[0] != "set" || args[1] != "colorscheme" {
+		return "", false
+	}
+	return args[2], true
+}
+
+func updateCommandColorschemePreview(input string) {
+	colorscheme, ok := commandColorschemeCandidate(input)
+	if !ok {
+		restoreCommandColorschemePreview()
+		return
+	}
+
+	if commandColorschemePreview.active && commandColorschemePreview.current == colorscheme {
+		return
+	}
+
+	if !commandColorschemePreview.active {
+		commandColorschemePreview.original = config.GlobalSettings["colorscheme"].(string)
+	}
+
+	if err := applyColorschemePreview(colorscheme); err != nil {
+		restoreCommandColorschemePreview()
+		return
+	}
+
+	commandColorschemePreview.active = true
+	commandColorschemePreview.current = colorscheme
+}
+
+func restoreCommandColorschemePreview() {
+	if !commandColorschemePreview.active {
+		return
+	}
+
+	original := commandColorschemePreview.original
+	commandColorschemePreview = colorschemePreviewState{}
+	_ = applyColorschemePreview(original)
 }
 
 func SetGlobalOptionNative(option string, nativeValue any, writeToFile bool) error {

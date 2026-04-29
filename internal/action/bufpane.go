@@ -835,6 +835,7 @@ var BufKeyActions = map[string]BufKeyAction{
 	"Unsplit":                       (*BufPane).Unsplit,
 	"VSplit":                        (*BufPane).VSplitAction,
 	"HSplit":                        (*BufPane).HSplitAction,
+	"HSplitTerm":                    (*BufPane).HSplitTerm,
 	"ToggleMacro":                   (*BufPane).ToggleMacro,
 	"PlayMacro":                     (*BufPane).PlayMacro,
 	"Suspend":                       (*BufPane).Suspend,
